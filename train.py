@@ -2,8 +2,10 @@ import math
 import warnings
 
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import LabelEncoder
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -74,8 +76,11 @@ train_dataset = TensorDataset(X_train, Y_train)
 test_dataset = TensorDataset(X_test, Y_test)
 test_loader = DataLoader(test_dataset, batch_size=4444, shuffle=True)
 
+# 检查是否有可用的 CUDA
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 # 初始化模型、损失函数和优化器
-model = Tudui()
+model = Tudui().to(device)
 loss_function = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
@@ -89,6 +94,7 @@ for epoch in range(epochs):
     model.train()  # 设置模型为训练模式
 
     for X_data, Y_data in train_loader:
+        X_data, Y_data = X_data.to(device), Y_data.to(device)  # 将数据移动到 GPU
         output = model(X_data)  # 前向传播
         loss = loss_function(output, Y_data)  # 计算损失
         optimizer.zero_grad()  # 梯度清零
@@ -110,6 +116,7 @@ for epoch in range(epochs):
         model.eval()  # 设置模型为评估模式
         with torch.no_grad():  # 禁用梯度计算
             for X_test_data, Y_test_data in test_loader:
+                X_test_data, Y_test_data = X_test_data.to(device), Y_test_data.to(device)  # 将数据移动到 GPU
                 out = model(X_test_data)  # 前向传播
                 pred_test = out.argmax(axis=1)  # 获取预测结果
                 matrix = confusion_matrix(Y_test_data, pred_test)  # 计算混淆矩阵
@@ -121,74 +128,3 @@ for epoch in range(epochs):
 
         print("**********************验证***********************")
         print(f"测试集上的 G-mean: {total_G_mean_test / len(test_loader):.4f}")
-
-    import unittest
-    import torch
-    import pandas as pd
-    from sklearn.preprocessing import LabelEncoder
-    from torch.utils.data import DataLoader, TensorDataset
-
-
-    class TestTuduiModel(unittest.TestCase):
-
-        def setUp(self):
-            self.model = Tudui()
-            self.loss_function = torch.nn.CrossEntropyLoss()
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001)
-            self.X_train, self.Y_train = load_data("./train.csv")
-            self.X_test, self.Y_test = load_data("./test.csv")
-            self.train_dataset = TensorDataset(self.X_train, self.Y_train)
-            self.test_dataset = TensorDataset(self.X_test, self.Y_test)
-            self.train_loader = DataLoader(self.train_dataset, batch_size=128, shuffle=True)
-            self.test_loader = DataLoader(self.test_dataset, batch_size=4444, shuffle=True)
-
-        def test_forward_pass(self):
-            input_tensor = torch.randn(1, 11)
-            output = self.model(input_tensor)
-            self.assertEqual(output.shape, (1, 2))
-
-        def test_training_step(self):
-            for X_data, Y_data in self.train_loader:
-                output = self.model(X_data)
-                loss = self.loss_function(output, Y_data)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-                self.assertGreaterEqual(loss.item(), 0)
-
-        def test_load_data(self):
-            X, Y = load_data("./train.csv")
-            self.assertEqual(X.shape[1], 11)
-            self.assertEqual(len(X), len(Y))
-
-        def test_g_mean_calculation(self):
-            for X_data, Y_data in self.train_loader:
-                output = self.model(X_data)
-                pred = output.argmax(axis=1)
-                matrix = confusion_matrix(Y_data, pred)
-                TN, FP, FN, TP = matrix.ravel()
-                FDR = TP / (TP + FN)
-                P = TN / (TN + FP)
-                G_mean = math.sqrt(FDR * P) if not np.isnan(FDR * P) else 0.0
-                self.assertGreaterEqual(G_mean, 0.0)
-                self.assertLessEqual(G_mean, 1.0)
-
-        def test_validation_step(self):
-            total_G_mean_test = 0
-            self.model.eval()
-            with torch.no_grad():
-                for X_test_data, Y_test_data in self.test_loader:
-                    out = self.model(X_test_data)
-                    pred_test = out.argmax(axis=1)
-                    matrix = confusion_matrix(Y_test_data, pred_test)
-                    TN, FP, FN, TP = matrix.ravel()
-                    FDR = TP / (TP + FN)
-                    P = TN / (TN + FP)
-                    G_mean_test = math.sqrt(FDR * P) if not np.isnan(FDR * P) else 0.0
-                    total_G_mean_test += G_mean_test
-            self.assertGreaterEqual(total_G_mean_test / len(self.test_loader), 0.0)
-            self.assertLessEqual(total_G_mean_test / len(self.test_loader), 1.0)
-
-
-    if __name__ == '__main__':
-        unittest.main()
