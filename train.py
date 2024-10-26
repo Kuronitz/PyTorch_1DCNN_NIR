@@ -1,6 +1,5 @@
 import math
 import warnings
-
 import numpy as np
 import pandas as pd
 import torch
@@ -30,7 +29,7 @@ class Tudui(nn.Module):
             nn.Conv1d(16, 32, 2), # 1D 卷积层
             nn.ReLU(),            # ReLU 激活函数
             nn.MaxPool1d(4),      # 最大池化层
-            nn.Flatten()          # 展平层
+            nn.Flatten(),         # 展平层
         )
         self.model2 = nn.Sequential(
             nn.Linear(32, 2),     # 全连接层
@@ -49,8 +48,7 @@ class Tudui(nn.Module):
         """
         input = input.reshape(-1, 1, 11)  # 重塑输入张量
         x = self.model1(input)            # 通过第一个子模型
-        x = self.model2(x)                # 通过第二个子模型
-        return x
+        return self.model2(x)             # 通过第二个子模型
 
 def load_data(file_path):
     """
@@ -102,10 +100,10 @@ for epoch in range(epochs):
         optimizer.step()  # 更新权重
 
         pred = output.argmax(axis=1)  # 获取预测结果
-        matrix = confusion_matrix(Y_data, pred)  # 计算混淆矩阵
+        matrix = confusion_matrix(Y_data.cpu(), pred.cpu())  # 计算混淆矩阵
         TN, FP, FN, TP = matrix.ravel()  # 提取混淆矩阵元素
-        FDR = TP / (TP + FN)  # 计算假发现率
-        P = TN / (TN + FP)  # 计算精度
+        FDR = TP / (TP + FN) if (TP + FN) != 0 else 0  # 计算假发现率
+        P = TN / (TN + FP) if (TN + FP) != 0 else 0  # 计算精度
         G_mean = math.sqrt(FDR * P) if not np.isnan(FDR * P) else 0.0  # 计算 G-mean
         total_G_mean += G_mean
 
@@ -119,10 +117,10 @@ for epoch in range(epochs):
                 X_test_data, Y_test_data = X_test_data.to(device), Y_test_data.to(device)  # 将数据移动到 GPU
                 out = model(X_test_data)  # 前向传播
                 pred_test = out.argmax(axis=1)  # 获取预测结果
-                matrix = confusion_matrix(Y_test_data, pred_test)  # 计算混淆矩阵
+                matrix = confusion_matrix(Y_test_data.cpu(), pred_test.cpu())  # 计算混淆矩阵
                 TN, FP, FN, TP = matrix.ravel()  # 提取混淆矩阵元素
-                FDR = TP / (TP + FN)  # 计算假发现率
-                P = TN / (TN + FP)  # 计算精度
+                FDR = TP / (TP + FN) if (TP + FN) != 0 else 0  # 计算假发现率
+                P = TN / (TN + FP) if (TN + FP) != 0 else 0  # 计算精度
                 G_mean_test = math.sqrt(FDR * P) if not np.isnan(FDR * P) else 0.0  # 计算 G-mean
                 total_G_mean_test += G_mean_test
 
